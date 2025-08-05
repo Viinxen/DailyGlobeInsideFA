@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de Bord des Salaires - The Daily Globe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: L'application est conçue comme un tableau de bord interactif. Cette structure a été choisie pour transformer un simple outil de saisie de données (le concept de la feuille de calcul) en un outil d'analyse et d'exploration. L'utilisateur peut obtenir une vue d'ensemble instantanée, puis filtrer par pôle pour analyser des sous-ensembles de données. Les cartes de résumé (KPIs), le tableau détaillé et le graphique visuel travaillent de concert pour offrir une compréhension complète et multi-facettes de la masse salariale. Le flux est simple : visualiser, filtrer pour explorer, et ajouter pour mettre à jour. -->
+    <!-- Visualization & Content Choices: 
+        - Barème (Source) -> JS Object (Data Storage) -> Logique interne pour les calculs automatiques. Justification: Sépare les données de la présentation.
+        - Liste des employés -> Table HTML interactive -> Filtrage par pôle. Justification: Présentation claire et structurée des données individuelles, rendue puissante par le filtrage.
+        - Répartition salariale -> Graphique en barres (Chart.js) -> Visualisation comparative des salaires totaux par poste. Justification: Permet de comparer visuellement et rapidement les niveaux de rémunération entre les différents rôles.
+        - Indicateurs clés (Masse salariale, etc.) -> Cartes de résumé (KPIs) -> Affichage direct des chiffres importants. Justification: Fournit des informations vitales en un coup d'œil.
+        - Ajout d'employé -> Formulaire HTML -> Saisie de données contrôlée avec des listes déroulantes dynamiques. Justification: Expérience utilisateur guidée et sans erreur pour l'ajout de nouvelles données. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 50vh;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-slate-900">Tableau de Bord des Salaires</h1>
+            <p class="text-slate-600 mt-1">Analyse interactive de la masse salariale de The Daily Globe.</p>
+        </header>
+
+        <main class="space-y-8">
+            
+            <!-- Section des contrôles et des KPIs -->
+            <section>
+                <div class="mb-6">
+                    <label for="poleFilter" class="block text-sm font-medium text-slate-700 mb-2">Filtrer par pôle :</label>
+                    <select id="poleFilter" class="w-full max-w-xs bg-white border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="Tous">Tous les pôles</option>
+                        <option value="Rédaction">Rédaction</option>
+                        <option value="Média">Média</option>
+                        <option value="Recruteur">Recruteur</option>
+                        <option value="Commercial">Commercial</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-sm font-medium text-slate-500">Masse Salariale Totale</h3>
+                        <p id="totalPayroll" class="text-3xl font-semibold mt-2">0 €</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-sm font-medium text-slate-500">Nombre d'employés</h3>
+                        <p id="employeeCount" class="text-3xl font-semibold mt-2">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-sm font-medium text-slate-500">Salaire Total Moyen</h3>
+                        <p id="averageSalary" class="text-3xl font-semibold mt-2">0 €</p>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-sm font-medium text-slate-500">Prime Moyenne</h3>
+                        <p id="averageBonus" class="text-3xl font-semibold mt-2">0 €</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section du graphique -->
+            <section class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-1">Comparaison des Salaires par Poste</h2>
+                <p class="text-slate-600 mb-4">Ce graphique compare la composition du salaire (base + prime) pour chaque poste dans la sélection actuelle.</p>
+                <div class="chart-container">
+                    <canvas id="salaryChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Section du tableau et du formulaire d'ajout -->
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Liste des Employés</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nom</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Pôle</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Poste</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Salaire Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employeeTableBody" class="bg-white divide-y divide-slate-200">
+                                <!-- Les lignes seront insérées ici par JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Ajouter un Employé</h2>
+                    <form id="addEmployeeForm" class="space-y-4">
+                        <div>
+                            <label for="employeeName" class="block text-sm font-medium text-slate-700">Nom</label>
+                            <input type="text" id="employeeName" required class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="employeePole" class="block text-sm font-medium text-slate-700">Pôle</label>
+                            <select id="employeePole" required class="mt-1 block w-full bg-white border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="" disabled selected>Choisir un pôle</option>
+                                <option value="Rédaction">Rédaction</option>
+                                <option value="Média">Média</option>
+                                <option value="Recruteur">Recruteur</option>
+                                <option value="Commercial">Commercial</option>
+                            </select>
+                        </div>
+                         <div>
+                            <label for="employeePoste" class="block text-sm font-medium text-slate-700">Poste</label>
+                            <select id="employeePoste" required class="mt-1 block w-full bg-white border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="" disabled selected>Choisir un poste</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Ajouter
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const salaryScale = {
+                'Journaliste': { pole: 'Rédaction', base: 2500, prime: 400 },
+                'Rédacteur en chef': { pole: 'Rédaction', base: 3200, prime: 600 },
+                'Vidéaste': { pole: 'Média', base: 2300, prime: 300 },
+                'Chargé de communication': { pole: 'Média', base: 2600, prime: 350 },
+                'Recruteur junior': { pole: 'Recruteur', base: 2200, prime: 250 },
+                'Responsable RH': { pole: 'Recruteur', base: 3000, prime: 500 },
+                'Commercial terrain': { pole: 'Commercial', base: 2400, prime: 400 },
+                'Responsable commercial': { pole: 'Commercial', base: 3100, prime: 550 },
+            };
+
+            let employees = [
+                { id: 1, name: 'Alice Martin', poste: 'Journaliste' },
+                { id: 2, name: 'Bob Durand', poste: 'Responsable commercial' },
+                { id: 3, name: 'Carla Petit', poste: 'Vidéaste' },
+                { id: 4, name: 'David Lefebvre', poste: 'Recruteur junior' },
+                { id: 5, name: 'Eva Moreau', poste: 'Rédacteur en chef' },
+            ];
+
+            const poleFilter = document.getElementById('poleFilter');
+            const tableBody = document.getElementById('employeeTableBody');
+            const totalPayrollEl = document.getElementById('totalPayroll');
+            const employeeCountEl = document.getElementById('employeeCount');
+            const averageSalaryEl = document.getElementById('averageSalary');
+            const averageBonusEl = document.getElementById('averageBonus');
+            const addEmployeeForm = document.getElementById('addEmployeeForm');
+            const employeePoleSelect = document.getElementById('employeePole');
+            const employeePosteSelect = document.getElementById('employeePoste');
+
+            const formatCurrency = (value) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(value);
+
+            let salaryChart;
+
+            function initializeChart() {
+                const ctx = document.getElementById('salaryChart').getContext('2d');
+                salaryChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Salaire de Base',
+                                data: [],
+                                backgroundColor: 'rgba(59, 130, 246, 0.7)', // blue-500
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'Prime',
+                                data: [],
+                                backgroundColor: 'rgba(251, 146, 60, 0.7)', // orange-400
+                                borderColor: 'rgba(251, 146, 60, 1)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                stacked: true,
+                            },
+                            y: {
+                                stacked: true,
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return formatCurrency(value);
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += formatCurrency(context.parsed.y);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateUI() {
+                const selectedPole = poleFilter.value;
+                
+                const filteredEmployees = employees.filter(emp => {
+                    if (selectedPole === 'Tous') return true;
+                    const details = salaryScale[emp.poste];
+                    return details && details.pole === selectedPole;
+                });
+
+                updateTable(filteredEmployees);
+                updateSummaryCards(filteredEmployees);
+                updateChart(filteredEmployees);
+            }
+            
+            function updateTable(data) {
+                tableBody.innerHTML = '';
+                if (data.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-slate-500">Aucun employé ne correspond à ce filtre.</td></tr>`;
+                    return;
+                }
+                data.forEach(emp => {
+                    const details = salaryScale[emp.poste];
+                    if (!details) return;
+                    const totalSalary = details.base + details.prime;
+                    const row = `
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">${emp.name}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${details.pole}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${emp.poste}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-700">${formatCurrency(totalSalary)}</td>
+                        </tr>
+                    `;
+                    tableBody.innerHTML += row;
+                });
+            }
+
+            function updateSummaryCards(data) {
+                const totalPayroll = data.reduce((sum, emp) => {
+                    const details = salaryScale[emp.poste];
+                    return sum + (details ? details.base + details.prime : 0);
+                }, 0);
+
+                const totalBonus = data.reduce((sum, emp) => {
+                    const details = salaryScale[emp.poste];
+                    return sum + (details ? details.prime : 0);
+                }, 0);
+
+                const employeeCount = data.length;
+                const averageSalary = employeeCount > 0 ? totalPayroll / employeeCount : 0;
+                const averageBonus = employeeCount > 0 ? totalBonus / employeeCount : 0;
+
+                totalPayrollEl.textContent = formatCurrency(totalPayroll);
+                employeeCountEl.textContent = employeeCount;
+                averageSalaryEl.textContent = formatCurrency(averageSalary);
+                averageBonusEl.textContent = formatCurrency(averageBonus);
+            }
+
+            function updateChart(data) {
+                const labels = data.map(emp => emp.name);
+                const baseSalaries = data.map(emp => salaryScale[emp.poste]?.base || 0);
+                const primes = data.map(emp => salaryScale[emp.poste]?.prime || 0);
+
+                salaryChart.data.labels = labels;
+                salaryChart.data.datasets[0].data = baseSalaries;
+                salaryChart.data.datasets[1].data = primes;
+                salaryChart.update();
+            }
+
+            function populatePosteSelect() {
+                const selectedPole = employeePoleSelect.value;
+                employeePosteSelect.innerHTML = '<option value="" disabled selected>Choisir un poste</option>';
+                
+                Object.keys(salaryScale).forEach(poste => {
+                    if (salaryScale[poste].pole === selectedPole) {
+                        const option = document.createElement('option');
+                        option.value = poste;
+                        option.textContent = poste;
+                        employeePosteSelect.appendChild(option);
+                    }
+                });
+            }
+
+            addEmployeeForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('employeeName').value;
+                const poste = document.getElementById('employeePoste').value;
+
+                if (name && poste) {
+                    const newEmployee = {
+                        id: employees.length > 0 ? Math.max(...employees.map(e => e.id)) + 1 : 1,
+                        name: name,
+                        poste: poste
+                    };
+                    employees.push(newEmployee);
+                    addEmployeeForm.reset();
+                    employeePosteSelect.innerHTML = '<option value="" disabled selected>Choisir un poste</option>';
+                    updateUI();
+                }
+            });
+
+            poleFilter.addEventListener('change', updateUI);
+            employeePoleSelect.addEventListener('change', populatePosteSelect);
+            
+            initializeChart();
+            updateUI();
+        });
+    </script>
+</body>
+</html>
